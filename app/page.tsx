@@ -3,13 +3,13 @@
 import { useAccount } from 'wagmi';
 import { WalletButton, WalletInfo } from '@/components/wallet';
 import { useEffect, useState } from 'react';
-import { useAssetBalances } from '@/lib/hooks';
+import { useEnhancedAssetBalances } from '@/lib/hooks';
 
 export default function Home() {
   const [mounted, setMounted] = useState(false);
   const [selectedChain, setSelectedChain] = useState<number>(1); // 1 for Ethereum, 137 for Polygon
   const { isConnected } = useAccount();
-  const { assetBalances, summary, isLoading, formatUSDValue, formatPriceChange } = useAssetBalances();
+  const { enhancedBalances, summary, isLoading, formatUSDValue, formatPriceChange } = useEnhancedAssetBalances();
 
   useEffect(() => {
     setMounted(true);
@@ -89,7 +89,10 @@ export default function Home() {
                   )}
                 </div>
                 <div className="mt-2 text-sm text-gray-500">
-                  {summary.activeAssets} 项资产 • {summary.activeChains} 个区块链
+                  {summary.activeAssets} 项活跃资产 • {summary.totalAssets} 项总资产 • {summary.activeChains} 个区块链
+                </div>
+                <div className="mt-1 text-xs text-gray-400">
+                  原生代币: {summary.nativeAssets} • ERC20代币: {summary.erc20Assets}
                 </div>
               </div>
 
@@ -100,7 +103,9 @@ export default function Home() {
                   name="Ethereum"
                   symbol="ETH"
                   value={formatUSDValue(
-                    assetBalances.find(b => b.chainId === 1)?.usdValue || 0
+                    enhancedBalances
+                      .filter(b => b.chainId === 1)
+                      .reduce((sum, b) => sum + b.usdValue, 0)
                   )}
                   active={selectedChain === 1}
                   onClick={() => setSelectedChain(1)}
@@ -110,7 +115,9 @@ export default function Home() {
                   name="Polygon"
                   symbol="MATIC"
                   value={formatUSDValue(
-                    assetBalances.find(b => b.chainId === 137)?.usdValue || 0
+                    enhancedBalances
+                      .filter(b => b.chainId === 137)
+                      .reduce((sum, b) => sum + b.usdValue, 0)
                   )}
                   active={selectedChain === 137}
                   onClick={() => setSelectedChain(137)}
@@ -119,7 +126,9 @@ export default function Home() {
 
               {/* Asset List */}
               {(() => {
-                const selectedAsset = assetBalances.find(b => b.chainId === selectedChain);
+                const chainAssets = enhancedBalances.filter(b => b.chainId === selectedChain);
+                const nativeAsset = chainAssets.find(a => a.type === 'native');
+                const erc20Assets = chainAssets.filter(a => a.type === 'erc20' && parseFloat(a.formatted) > 0);
                 const chainName = selectedChain === 1 ? 'Ethereum' : 'Polygon';
                 
                 return (
@@ -129,52 +138,35 @@ export default function Home() {
                     </div>
                     
                     {/* Native Token */}
-                    {selectedAsset && (
-                      <div className="p-6 border-b border-gray-200">
-                        <div className="flex justify-between items-center">
-                          <div className="flex items-center">
-                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
-                              <span className="text-blue-600 font-bold text-xs">
-                                {selectedAsset.symbol}
-                              </span>
-                            </div>
-                            <div>
-                              <div className="font-medium text-gray-900">
-                                {selectedAsset.chainName} ({selectedAsset.symbol})
-                              </div>
-                              {selectedAsset.price > 0 && (
-                                <div className="text-sm text-gray-500">
-                                  {formatUSDValue(selectedAsset.price)}
-                                  {selectedAsset.priceChange24h !== 0 && (
-                                    <span className={`ml-1 ${
-                                      selectedAsset.priceChange24h >= 0 ? 'text-green-600' : 'text-red-600'
-                                    }`}>
-                                      ({formatPriceChange(selectedAsset.priceChange24h)})
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-bold text-gray-900">
-                              {selectedAsset.isLoading ? '...' : parseFloat(selectedAsset.formatted).toFixed(4)}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              {formatUSDValue(selectedAsset.usdValue)}
-                            </div>
-                          </div>
+                    {nativeAsset && (
+                      <AssetItem asset={nativeAsset} formatUSDValue={formatUSDValue} formatPriceChange={formatPriceChange} />
+                    )}
+
+                    {/* ERC20 Tokens */}
+                    {erc20Assets.length > 0 && (
+                      <div className="border-t border-gray-200">
+                        <div className="p-6 border-b border-gray-200">
+                          <h4 className="text-sm font-medium text-gray-700">ERC20 代币</h4>
                         </div>
+                        {erc20Assets.map((asset) => (
+                          <AssetItem 
+                            key={`${asset.chainId}-${asset.address || asset.symbol}`}
+                            asset={asset} 
+                            formatUSDValue={formatUSDValue} 
+                            formatPriceChange={formatPriceChange}
+                          />
+                        ))}
                       </div>
                     )}
 
-                    {/* Tokens Section */}
-                    <div className="p-6">
-                      <h4 className="text-sm font-medium text-gray-700 mb-4">代币资产</h4>
-                      <div className="text-center py-8 text-gray-500">
-                        暂无代币资产
+                    {/* Empty state for tokens */}
+                    {erc20Assets.length === 0 && (
+                      <div className="p-6 border-t border-gray-200">
+                        <div className="text-center py-4 text-gray-500">
+                          暂无ERC20代币资产
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 );
               })()} 
@@ -210,5 +202,62 @@ function ChainTab({ name, symbol, value, active, onClick }: ChainTabProps) {
     >
       {name} ({value})
     </button>
+  );
+}
+
+// 新增资产项目组件
+interface AssetItemProps {
+  asset: any;
+  formatUSDValue: (value: number) => string;
+  formatPriceChange: (change: number) => string;
+}
+
+function AssetItem({ asset, formatUSDValue, formatPriceChange }: AssetItemProps) {
+  return (
+    <div className="p-6 border-b border-gray-200 last:border-b-0">
+      <div className="flex justify-between items-center">
+        <div className="flex items-center">
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center mr-3 ${
+            asset.type === 'native' ? 'bg-blue-100' : 'bg-gray-100'
+          }`}>
+            <span className={`font-bold text-xs ${
+              asset.type === 'native' ? 'text-blue-600' : 'text-gray-600'
+            }`}>
+              {asset.symbol}
+            </span>
+          </div>
+          <div>
+            <div className="font-medium text-gray-900 flex items-center gap-2">
+              {asset.name}
+              {asset.type === 'erc20' && (
+                <span className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded">
+                  ERC20
+                </span>
+              )}
+            </div>
+            {asset.price > 0 && (
+              <div className="text-sm text-gray-500">
+                {formatUSDValue(asset.price)}
+                {asset.priceChange24h !== 0 && (
+                  <span className={`ml-1 ${
+                    asset.priceChange24h >= 0 ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    ({formatPriceChange(asset.priceChange24h)})
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="font-bold text-gray-900">
+            {asset.isLoading ? '...' : parseFloat(asset.formatted).toFixed(4)}
+          </div>
+          <div className="text-sm text-gray-500">
+            {formatUSDValue(asset.usdValue)}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
