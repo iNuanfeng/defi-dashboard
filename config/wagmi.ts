@@ -1,9 +1,12 @@
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import {
-  arbitrum,
-  base,
+  injectedWallet,
+  metaMaskWallet,
+  walletConnectWallet,
+  trustWallet,
+} from '@rainbow-me/rainbowkit/wallets';
+import {
   mainnet,
-  optimism,
   polygon,
   sepolia,
 } from 'wagmi/chains';
@@ -16,7 +19,19 @@ export const config = getDefaultConfig({
     polygon,
     ...(process.env.NODE_ENV === 'development' ? [sepolia] : []),
   ],
-  ssr: true, // If your dApp uses server side rendering (SSR)
+  wallets: [
+    {
+      groupName: "Recommended",
+      wallets: [
+        injectedWallet,
+        // 防止 SSR 时 indexedDB 错误 - 只在浏览器环境加载 WalletConnect 相关钱包
+        ...(typeof indexedDB !== "undefined"
+          ? [metaMaskWallet, walletConnectWallet, trustWallet]
+          : []),
+      ],
+    },
+  ],
+  ssr: true, // 重新启用 SSR
 });
 
 export const supportedChains = [
