@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useNativeBalances } from './useNativeBalances';
 import { useTokenBalances } from './useTokenBalances';
-import { priceService, PriceData } from '@/lib/services/priceService';
+import { useAllTokenPrices } from './usePriceData';
+import { calculateUSDValue, formatUSDValue, formatPriceChange } from '@/lib/utils/formatters';
 
 export interface EnhancedAssetBalance {
   type: 'native' | 'erc20';
@@ -34,38 +35,19 @@ export interface EnhancedAssetSummary {
 /**
  * Hook for aggregating native and ERC20 token balances with price data
  * Provides comprehensive portfolio overview across multiple chains
+ * Now uses React Query for price data management
  */
 export const useEnhancedAssetBalances = () => {
   const { balances: nativeBalances, isLoading: nativeLoading, refetch: refetchNative } = useNativeBalances();
   const { tokenBalances, isLoading: tokenLoading, refetch: refetchTokens } = useTokenBalances();
-  const [prices, setPrices] = useState<PriceData>({});
-  const [pricesLoading, setPricesLoading] = useState(false);
-  const [pricesError, setPricesError] = useState<Error | null>(null);
-
-  // Fetch prices for all tokens
-  useEffect(() => {
-    const fetchPrices = async () => {
-      setPricesLoading(true);
-      setPricesError(null);
-      
-      try {
-        const priceData = await priceService.getAllTokenPrices();
-        setPrices(priceData);
-      } catch (error) {
-        const err = error instanceof Error ? error : new Error('Failed to fetch prices');
-        setPricesError(err);
-        console.error('Error fetching prices:', err);
-      } finally {
-        setPricesLoading(false);
-      }
-    };
-
-    fetchPrices();
-    
-    // Set up interval for price updates (every 60 seconds)
-    const interval = setInterval(fetchPrices, 60000);
-    return () => clearInterval(interval);
-  }, []);
+  
+  // Use React Query for price data
+  const { 
+    data: prices = {}, 
+    isLoading: pricesLoading, 
+    error: pricesError, 
+    refetch: refetchPrices 
+  } = useAllTokenPrices();
 
   // Combine all asset balances
   const enhancedBalances = useMemo((): EnhancedAssetBalance[] => {
@@ -86,10 +68,10 @@ export const useEnhancedAssetBalances = () => {
           coingeckoId = '';
       }
 
-      const priceData = coingeckoId && prices[coingeckoId];
-      const price = priceData?.usd || 0;
-      const priceChange24h = priceData?.usd_24h_change || 0;
-      const usdValue = priceService.calculateUSDValue(balance.formatted, price);
+      const priceData = coingeckoId ? prices[coingeckoId] : undefined;
+      const price = priceData && typeof priceData === 'object' ? priceData.usd : 0;
+      const priceChange24h = priceData && typeof priceData === 'object' ? (priceData.usd_24h_change || 0) : 0;
+      const usdValue = calculateUSDValue(balance.formatted, price);
 
       results.push({
         type: 'native',
@@ -112,9 +94,9 @@ export const useEnhancedAssetBalances = () => {
     // Add ERC20 token balances
     tokenBalances.forEach(token => {
       const priceData = prices[token.coingeckoId];
-      const price = priceData?.usd || 0;
-      const priceChange24h = priceData?.usd_24h_change || 0;
-      const usdValue = priceService.calculateUSDValue(token.formatted, price);
+      const price = priceData && typeof priceData === 'object' ? priceData.usd : 0;
+      const priceChange24h = priceData && typeof priceData === 'object' ? (priceData.usd_24h_change || 0) : 0;
+      const usdValue = calculateUSDValue(token.formatted, price);
 
       results.push({
         type: 'erc20',
@@ -192,8 +174,8 @@ export const useEnhancedAssetBalances = () => {
     refetch: () => {
       refetchNative();
       refetchTokens();
-      // Force price refetch by clearing cache
-      priceService.clearCache();
+      // Refetch prices using React Query
+      refetchPrices();
     },
     // Utility functions for filtering
     getAssetsByChain: (chainId: number) => 
@@ -205,7 +187,7 @@ export const useEnhancedAssetBalances = () => {
     getActiveAssets: () => 
       enhancedBalances.filter(asset => parseFloat(asset.formatted) > 0),
     // Utility functions for formatting
-    formatUSDValue: priceService.formatUSDValue,
-    formatPriceChange: priceService.formatPriceChange,
+    formatUSDValue,
+    formatPriceChange,
   };
 };

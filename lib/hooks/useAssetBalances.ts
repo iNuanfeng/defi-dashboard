@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useNativeBalances } from './useNativeBalances';
-import { priceService, PriceData, TOKEN_IDS } from '@/lib/services/priceService';
+import { useNativePrices, TOKEN_IDS } from './usePriceData';
+import { calculateUSDValue, formatUSDValue, formatPriceChange } from '@/lib/utils/formatters';
 
 export interface AssetBalance {
   chainId: number;
@@ -26,37 +27,18 @@ export interface AssetSummary {
 /**
  * Hook for aggregating native token balances with price data
  * Combines balance queries with real-time price information
+ * Now uses React Query for price data management
  */
 export const useAssetBalances = () => {
   const { balances: nativeBalances, isLoading: balancesLoading, refetch: refetchBalances } = useNativeBalances();
-  const [prices, setPrices] = useState<PriceData>({});
-  const [pricesLoading, setPricesLoading] = useState(false);
-  const [pricesError, setPricesError] = useState<Error | null>(null);
-
-  // Fetch prices for native tokens
-  useEffect(() => {
-    const fetchPrices = async () => {
-      setPricesLoading(true);
-      setPricesError(null);
-      
-      try {
-        const priceData = await priceService.getNativePrices();
-        setPrices(priceData);
-      } catch (error) {
-        const err = error instanceof Error ? error : new Error('Failed to fetch prices');
-        setPricesError(err);
-        console.error('Error fetching prices:', err);
-      } finally {
-        setPricesLoading(false);
-      }
-    };
-
-    fetchPrices();
-    
-    // Set up interval for price updates (every 60 seconds)
-    const interval = setInterval(fetchPrices, 60000);
-    return () => clearInterval(interval);
-  }, []);
+  
+  // Use React Query for price data
+  const { 
+    data: prices = {}, 
+    isLoading: pricesLoading, 
+    error: pricesError, 
+    refetch: refetchPrices 
+  } = useNativePrices();
 
   // Combine balance and price data
   const assetBalances = useMemo((): AssetBalance[] => {
@@ -79,12 +61,12 @@ export const useAssetBalances = () => {
 
       // Get price data if available
       if (tokenId && prices[tokenId]) {
-        price = prices[tokenId].current_price;
-        priceChange24h = prices[tokenId].price_change_percentage_24h || 0;
+        price = prices[tokenId].usd;
+        priceChange24h = prices[tokenId].usd_24h_change || 0;
       }
 
       // Calculate USD value
-      const usdValue = priceService.calculateUSDValue(balance.formatted, price);
+      const usdValue = calculateUSDValue(balance.formatted, price);
 
       return {
         ...balance,
@@ -143,11 +125,11 @@ export const useAssetBalances = () => {
     pricesError,
     refetch: () => {
       refetchBalances();
-      // Force price refetch by clearing cache
-      priceService.clearCache();
+      // Refetch prices using React Query
+      refetchPrices();
     },
     // Utility functions for formatting
-    formatUSDValue: priceService.formatUSDValue,
-    formatPriceChange: priceService.formatPriceChange,
+    formatUSDValue,
+    formatPriceChange,
   };
 };

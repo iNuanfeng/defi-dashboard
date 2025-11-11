@@ -11,18 +11,6 @@ export default function Home() {
   const { isConnected } = useAccount();
   const { enhancedBalances, summary, isLoading, formatUSDValue, formatPriceChange } = useEnhancedAssetBalances();
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-pulse text-gray-500">加载中...</div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
