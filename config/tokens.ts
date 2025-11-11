@@ -10,10 +10,10 @@ export interface TokenConfig {
   logoUrl?: string;
 }
 
-// Ethereum Mainnet Tokens
+// Ethereum Mainnet Tokens (使用正确的合约地址)
 export const ETHEREUM_TOKENS: TokenConfig[] = [
   {
-    address: '0xA0b86a33E6441b4b5DD9a5DF129D8d7C4e7A5a5e', // USDT
+    address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', // USDT - 官方合约地址
     symbol: 'USDT',
     name: 'Tether USD',
     decimals: 6,
