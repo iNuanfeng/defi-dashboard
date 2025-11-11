@@ -38,8 +38,8 @@ export interface EnhancedAssetSummary {
  * Now uses React Query for price data management
  */
 export const useEnhancedAssetBalances = () => {
-  const { balances: nativeBalances, isLoading: nativeLoading, refetch: refetchNative } = useNativeBalances();
-  const { tokenBalances, isLoading: tokenLoading, refetch: refetchTokens } = useTokenBalances();
+  const { balances: nativeBalances, isLoading: nativeLoading, hasError: nativeError, refetch: refetchNative } = useNativeBalances();
+  const { tokenBalances, isLoading: tokenLoading, hasError: tokenError, refetch: refetchTokens } = useTokenBalances();
   
   // Use React Query for price data
   const { 
@@ -163,7 +163,16 @@ export const useEnhancedAssetBalances = () => {
   }, [enhancedBalances]);
 
   const isLoading = nativeLoading || tokenLoading || pricesLoading;
-  const hasError = !!pricesError || enhancedBalances.some(asset => !!asset.error);
+  
+  // 更温和的错误处理策略：
+  // 只有在完全无法获取任何数据时才显示全局错误
+  // 单个代币的错误不影响整体页面展示
+  const hasCriticalError = (!!pricesError && Object.keys(prices).length === 0) || 
+                          (nativeError && nativeBalances.length === 0) || 
+                          (tokenError && tokenBalances.length === 0);
+
+  // 移除对单个资产错误的检查，让页面正常显示
+  const hasError = hasCriticalError;
 
   return {
     enhancedBalances,

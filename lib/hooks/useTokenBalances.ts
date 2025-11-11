@@ -90,7 +90,7 @@ export const useTokenBalances = () => {
     if (ethereumResults.data) {
       ethereumResults.data.forEach((result, index) => {
         const token = ethereumTokens[index];
-        const balance = result.result as bigint || 0n;
+        const balance = result.result as bigint || BigInt(0);
         const formatted = formatTokenBalance(balance, token.decimals);
 
         results.push({
@@ -113,7 +113,7 @@ export const useTokenBalances = () => {
     if (polygonResults.data) {
       polygonResults.data.forEach((result, index) => {
         const token = polygonTokens[index];
-        const balance = result.result as bigint || 0n;
+        const balance = result.result as bigint || BigInt(0);
         const formatted = formatTokenBalance(balance, token.decimals);
 
         results.push({
@@ -159,13 +159,13 @@ export const useTokenBalances = () => {
  * Format token balance from wei to human readable format
  */
 function formatTokenBalance(balance: bigint, decimals: number): string {
-  if (balance === 0n) return '0';
+  if (balance === BigInt(0)) return '0';
   
   const divisor = BigInt(10 ** decimals);
   const quotient = balance / divisor;
   const remainder = balance % divisor;
   
-  if (remainder === 0n) {
+  if (remainder === BigInt(0)) {
     return quotient.toString();
   }
   

@@ -2,14 +2,39 @@
 
 import { useAccount } from 'wagmi';
 import { WalletButton, WalletInfo } from '@/components/wallet';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useEnhancedAssetBalances } from '@/lib/hooks';
+import { AssetList, CompactAssetCard } from '@/components/assets';
+import { LoadingState, ErrorState, NoAssetsState, EmptyState, ChainTabGroup } from '@/components/ui';
 
 export default function Home() {
-  const [mounted, setMounted] = useState(false);
   const [selectedChain, setSelectedChain] = useState<number>(1); // 1 for Ethereum, 137 for Polygon
   const { isConnected } = useAccount();
-  const { enhancedBalances, summary, isLoading, formatUSDValue, formatPriceChange } = useEnhancedAssetBalances();
+  const { enhancedBalances, summary, isLoading, hasError, formatUSDValue, formatPriceChange } = useEnhancedAssetBalances();
+
+  // 准备链数据
+  const chainData = useMemo(() => [
+    {
+      chainId: 1,
+      name: 'Ethereum',
+      symbol: 'ETH',
+      value: formatUSDValue(
+        enhancedBalances
+          .filter(b => b.chainId === 1)
+          .reduce((sum, b) => sum + b.usdValue, 0)
+      )
+    },
+    {
+      chainId: 137,
+      name: 'Polygon',
+      symbol: 'MATIC',
+      value: formatUSDValue(
+        enhancedBalances
+          .filter(b => b.chainId === 137)
+          .reduce((sum, b) => sum + b.usdValue, 0)
+      )
+    }
+  ], [enhancedBalances, formatUSDValue]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -55,6 +80,22 @@ export default function Home() {
               </p>
             </div>
           </div>
+        ) : hasError ? (
+          // Error State
+          <ErrorState 
+            title="加载资产失败"
+            message="无法获取您的资产信息，请检查网络连接或稍后重试"
+            onRetry={() => window.location.reload()}
+          />
+        ) : isLoading ? (
+          // Loading State
+          <LoadingState message="正在加载资产..." />
+        ) : enhancedBalances.length === 0 ? (
+          // Empty State
+          <NoAssetsState 
+            isConnected={isConnected}
+            onConnectWallet={() => {}}
+          />
         ) : (
           // Dashboard (已连接钱包状态)
           <div>
@@ -66,7 +107,7 @@ export default function Home() {
                 <h3 className="text-lg font-medium text-gray-600 mb-2">总资产价值</h3>
                 <div className="flex items-center gap-4">
                   <div className="text-4xl font-bold text-gray-900">
-                    {isLoading ? '加载中...' : formatUSDValue(summary.totalUSDValue)}
+                    {formatUSDValue(summary.totalUSDValue)}
                   </div>
                   {summary.totalChange24h !== 0 && (
                     <div className={`text-sm font-medium ${
@@ -85,79 +126,29 @@ export default function Home() {
               </div>
 
               {/* Chain Tabs */}
-              <div className="flex gap-2 mb-6">
-                <ChainTab 
-                  chainId={1}
-                  name="Ethereum"
-                  symbol="ETH"
-                  value={formatUSDValue(
-                    enhancedBalances
-                      .filter(b => b.chainId === 1)
-                      .reduce((sum, b) => sum + b.usdValue, 0)
-                  )}
-                  active={selectedChain === 1}
-                  onClick={() => setSelectedChain(1)}
-                />
-                <ChainTab 
-                  chainId={137}
-                  name="Polygon"
-                  symbol="MATIC"
-                  value={formatUSDValue(
-                    enhancedBalances
-                      .filter(b => b.chainId === 137)
-                      .reduce((sum, b) => sum + b.usdValue, 0)
-                  )}
-                  active={selectedChain === 137}
-                  onClick={() => setSelectedChain(137)}
-                />
-              </div>
+              <ChainTabGroup
+                chains={chainData}
+                activeChainId={selectedChain}
+                onChainChange={setSelectedChain}
+                className="mb-6"
+              />
 
               {/* Asset List */}
-              {(() => {
-                const chainAssets = enhancedBalances.filter(b => b.chainId === selectedChain);
-                const nativeAsset = chainAssets.find(a => a.type === 'native');
-                const erc20Assets = chainAssets.filter(a => a.type === 'erc20' && parseFloat(a.formatted) > 0);
-                const chainName = selectedChain === 1 ? 'Ethereum' : 'Polygon';
-                
-                return (
-                  <div className="bg-white rounded-lg border border-gray-200">
-                    <div className="p-6 border-b border-gray-200">
-                      <h3 className="text-lg font-semibold text-gray-900">{chainName} 资产</h3>
-                    </div>
-                    
-                    {/* Native Token */}
-                    {nativeAsset && (
-                      <AssetItem asset={nativeAsset} formatUSDValue={formatUSDValue} formatPriceChange={formatPriceChange} />
-                    )}
-
-                    {/* ERC20 Tokens */}
-                    {erc20Assets.length > 0 && (
-                      <div className="border-t border-gray-200">
-                        <div className="p-6 border-b border-gray-200">
-                          <h4 className="text-sm font-medium text-gray-700">ERC20 代币</h4>
-                        </div>
-                        {erc20Assets.map((asset) => (
-                          <AssetItem 
-                            key={`${asset.chainId}-${asset.address || asset.symbol}`}
-                            asset={asset} 
-                            formatUSDValue={formatUSDValue} 
-                            formatPriceChange={formatPriceChange}
-                          />
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Empty state for tokens */}
-                    {erc20Assets.length === 0 && (
-                      <div className="p-6 border-t border-gray-200">
-                        <div className="text-center py-4 text-gray-500">
-                          暂无ERC20代币资产
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()} 
+              <div className="bg-white rounded-lg border border-gray-200">
+                <div className="p-6 border-b border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    {selectedChain === 1 ? 'Ethereum 资产' : 'Polygon 资产'}
+                  </h3>
+                </div>
+                <div className="p-6">
+                  <AssetList 
+                    assets={enhancedBalances.filter(b => b.chainId === selectedChain)}
+                    isLoading={isLoading}
+                    showControls={false}
+                    showEmptyState={true}
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Wallet Info */}
@@ -165,87 +156,6 @@ export default function Home() {
           </div>
         )}
       </main>
-    </div>
-  );
-}
-
-interface ChainTabProps {
-  chainId: number;
-  name: string;
-  symbol: string;
-  value: string;
-  active: boolean;
-  onClick: () => void;
-}
-
-function ChainTab({ name, symbol, value, active, onClick }: ChainTabProps) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-        active 
-          ? 'bg-blue-600 text-white' 
-          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-      }`}
-    >
-      {name} ({value})
-    </button>
-  );
-}
-
-// 新增资产项目组件
-interface AssetItemProps {
-  asset: any;
-  formatUSDValue: (value: number) => string;
-  formatPriceChange: (change: number) => string;
-}
-
-function AssetItem({ asset, formatUSDValue, formatPriceChange }: AssetItemProps) {
-  return (
-    <div className="p-6 border-b border-gray-200 last:border-b-0">
-      <div className="flex justify-between items-center">
-        <div className="flex items-center">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center mr-3 ${
-            asset.type === 'native' ? 'bg-blue-100' : 'bg-gray-100'
-          }`}>
-            <span className={`font-bold text-xs ${
-              asset.type === 'native' ? 'text-blue-600' : 'text-gray-600'
-            }`}>
-              {asset.symbol}
-            </span>
-          </div>
-          <div>
-            <div className="font-medium text-gray-900 flex items-center gap-2">
-              {asset.name}
-              {asset.type === 'erc20' && (
-                <span className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded">
-                  ERC20
-                </span>
-              )}
-            </div>
-            {asset.price > 0 && (
-              <div className="text-sm text-gray-500">
-                {formatUSDValue(asset.price)}
-                {asset.priceChange24h !== 0 && (
-                  <span className={`ml-1 ${
-                    asset.priceChange24h >= 0 ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    ({formatPriceChange(asset.priceChange24h)})
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="text-right">
-          <div className="font-bold text-gray-900">
-            {asset.isLoading ? '...' : parseFloat(asset.formatted).toFixed(4)}
-          </div>
-          <div className="text-sm text-gray-500">
-            {formatUSDValue(asset.usdValue)}
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
