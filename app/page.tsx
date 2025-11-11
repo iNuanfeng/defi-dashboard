@@ -54,7 +54,9 @@ export default function Home() {
 
             {/* Right side */}
             <div className="flex items-center gap-4">
-              <WalletButton />
+              <div className="flex justify-center">
+                <WalletButton />
+              </div>
             </div>
           </div>
         </div>
@@ -71,8 +73,9 @@ export default function Home() {
             <p className="text-lg text-gray-600 mb-8 max-w-2xl mx-auto">
               连接您的钱包，查看您的资产和交易历史，管理您的DeFi投资
             </p>
-            <WalletButton />
-            
+            <div className="flex justify-center">
+              <WalletButton />
+            </div>
             {/* Footer */}
             <div className="mt-20 pt-8 border-t border-gray-200">
               <p className="text-gray-500 text-sm">
